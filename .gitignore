@@ -1,0 +1,24 @@
+## Build & Artifacts
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+[Ll]ogs/
+TestResults/
+coverage/
+*.cobertura.xml
+
+## Visual Studio & IDEs
+.vs/
+.idea/
+*.user
+*.userosscache
+*.suo
+*.userprefs
+.vscode/
+
+## Secrets & Local Configs
+appsettings.Local.json
+*.local.json
+.env
+.env.local
+.env.*.local

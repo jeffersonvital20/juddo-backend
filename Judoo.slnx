@@ -1,0 +1,12 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/Judoo.Api/Judoo.Api.csproj" />
+    <Project Path="src/Judoo.Application/Judoo.Application.csproj" />
+    <Project Path="src/Judoo.Domain/Judoo.Domain.csproj" />
+    <Project Path="src/Judoo.Infrastructure/Judoo.Infrastructure.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/Judoo.Domain.UnitTests/Judoo.Domain.UnitTests.csproj" />
+    <Project Path="tests/Judoo.IntegrationTests/Judoo.IntegrationTests.csproj" />
+  </Folder>
+</Solution>

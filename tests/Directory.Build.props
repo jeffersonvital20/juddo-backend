@@ -1,0 +1,13 @@
+<Project>
+  <PropertyGroup>
+    <!-- Coverage mínimo declarado e respeitado de 90% em todos os projetos de teste -->
+    <CollectCoverage>true</CollectCoverage>
+    <CoverletOutputFormat>cobertura</CoverletOutputFormat>
+    <CoverletOutput>$(MSBuildProjectDirectory)/TestResults/coverage.cobertura.xml</CoverletOutput>
+    <Threshold>90</Threshold>
+    <ThresholdType>line,method</ThresholdType>
+    <ThresholdStat>total</ThresholdStat>
+    <Exclude>[Judoo.Infrastructure]Judoo.Infrastructure.Migrations.*</Exclude>
+    <ExcludeByAttribute>GeneratedCodeAttribute,CompilerGeneratedAttribute</ExcludeByAttribute>
+  </PropertyGroup>
+</Project>
