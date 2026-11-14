@@ -1,0 +1,51 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: judoo-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-judoo_db_dev}
+      POSTGRES_USER: ${POSTGRES_USER:-judoo_user}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-judoo_secret}
+    ports:
+      - "${POSTGRES_PORT:-5433}:5432"
+    volumes:
+      - judoo_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER:-judoo_user} -d $${POSTGRES_DB:-judoo_db_dev}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    networks:
+      - judoo-network
+
+  judoo-api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: judoo-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      ASPNETCORE_ENVIRONMENT: ${ASPNETCORE_ENVIRONMENT:-Development}
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__DefaultConnection: "Host=postgres;Port=5432;Database=${POSTGRES_DB:-judoo_db_dev};Username=${POSTGRES_USER:-judoo_user};Password=${POSTGRES_PASSWORD:-judoo_secret};"
+      Jwt__Key: ${JWT_KEY:-JudooSuperSecretKeyForJwtAuthentication2026!}
+      Jwt__Issuer: ${JWT_ISSUER:-Judoo.Api}
+      Jwt__Audience: ${JWT_AUDIENCE:-Judoo.Clients}
+      Swagger__Enabled: "true"
+      Swagger__RoutePrefix: ""
+      Security__SeedDemoUsers: "true"
+    ports:
+      - "${API_PORT:-8080}:8080"
+    networks:
+      - judoo-network
+
+volumes:
+  judoo_pgdata:
+
+networks:
+  judoo-network:
+    driver: bridge

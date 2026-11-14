@@ -1,0 +1,14 @@
+**/.git
+**/.gitignore
+**/.vs
+**/.vscode
+**/bin
+**/obj
+**/out
+**/publish
+**/TestResults
+**/*.user
+**/*.suo
+msbuild.log
+global.json
+tests/

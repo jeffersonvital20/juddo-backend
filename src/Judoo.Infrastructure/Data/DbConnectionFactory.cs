@@ -16,7 +16,7 @@ public class DbConnectionFactory : IDbConnectionFactory
     public DbConnectionFactory(IConfiguration configuration)
     {
         _connectionString = configuration.GetConnectionString("DefaultConnection") 
-            ?? "Host=localhost;Port=5432;Database=judoo_db;Username=judoo_user;Password=judoo_secret;";
+            ?? "Host=localhost;Port=5433;Database=judoo_db_dev;Username=judoo_user;Password=judoo_secret;";
     }
 
     public IDbConnection CreateConnection()

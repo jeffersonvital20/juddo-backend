@@ -15,7 +15,7 @@ public static class DependencyInjection
     public static IServiceCollection AddInfrastructure(this IServiceCollection services, IConfiguration configuration)
     {
         var connectionString = configuration.GetConnectionString("DefaultConnection")
-            ?? "Host=localhost;Port=5432;Database=judoo_db;Username=judoo_user;Password=judoo_secret;";
+            ?? "Host=localhost;Port=5433;Database=judoo_db_dev;Username=judoo_user;Password=judoo_secret;";
 
         // 1. Entity Framework Core (para Modelagem, Mapeamentos e Migrations)
         services.AddDbContext<JudooDbContext>(options =>
@@ -23,6 +23,7 @@ public static class DependencyInjection
             options.UseNpgsql(connectionString, b =>
             {
                 b.MigrationsAssembly(typeof(JudooDbContext).Assembly.FullName);
+                b.EnableRetryOnFailure(maxRetryCount: 5, maxRetryDelay: TimeSpan.FromSeconds(5), errorCodesToAdd: null);
             });
         });
 
