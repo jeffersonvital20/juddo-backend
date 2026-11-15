@@ -11,6 +11,7 @@ public interface ILutaRepository
     Task<IEnumerable<Luta>> ObterTodasAsync(Guid? campeonatoId = null, CancellationToken ct = default);
     Task CriarLutaAsync(Luta luta, CancellationToken ct = default);
     Task AtualizarStatusLutaAsync(Guid lutaId, StatusLuta status, Guid? vencedorId, TipoVitoria? tipoVitoria, CancellationToken ct = default);
+    Task AvancarVencedorCopaAsync(Guid lutaFinalizadaId, CancellationToken ct = default);
     Task AtribuirTatameAsync(Guid lutaId, Guid? tatameId, int? ordemNoTatame, CancellationToken ct = default);
     Task RegistrarEventoPontuacaoAsync(EventoPontuacao evento, CancellationToken ct = default);
 }
@@ -36,7 +37,10 @@ public interface ICampeonatoRepository
     Task CriarAsync(Campeonato campeonato, CancellationToken ct = default);
     Task AtualizarStatusAsync(Guid id, string status, CancellationToken ct = default);
     Task<IEnumerable<Categoria>> ObterCategoriasAsync(Guid campeonatoId, CancellationToken ct = default);
+    Task<Categoria?> ObterCategoriaPorIdAsync(Guid categoriaId, CancellationToken ct = default);
     Task CriarCategoriaAsync(Categoria categoria, CancellationToken ct = default);
+    Task AtualizarCategoriaAsync(Categoria categoria, CancellationToken ct = default);
+    Task RemoverCategoriaAsync(Guid categoriaId, CancellationToken ct = default);
     Task<IEnumerable<Chave>> ObterChavesAsync(Guid campeonatoId, CancellationToken ct = default);
     Task<Chave?> ObterOuCriarChaveAsync(Guid campeonatoId, Guid categoriaId, CancellationToken ct = default);
     Task AtualizarChaveGeradaAsync(Guid chaveId, int totalFases, bool gerada, CancellationToken ct = default);
@@ -59,5 +63,7 @@ public interface IUsuarioRepository
     Task<Usuario?> ObterPorEmailAsync(string email, CancellationToken ct = default);
     Task<IEnumerable<Usuario>> ObterTodosAsync(CancellationToken ct = default);
     Task CriarAsync(Usuario usuario, CancellationToken ct = default);
+    Task AtualizarAsync(Usuario usuario, CancellationToken ct = default);
     Task AtualizarStatusAsync(Guid id, bool ativo, CancellationToken ct = default);
+    Task RemoverAsync(Guid id, CancellationToken ct = default);
 }

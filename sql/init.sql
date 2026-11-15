@@ -44,9 +44,11 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 
 DO $$ BEGIN
     CREATE TYPE tipo_pontuacao AS ENUM (
+        'YUKO',
         'WAZA_ARI', 
         'IPPON', 
         'SHIDO', 
+        'CANCELAR_YUKO',
         'CANCELAR_WAZA_ARI', 
         'CANCELAR_SHIDO'
     );
@@ -57,6 +59,7 @@ DO $$ BEGIN
         'IPPON', 
         'WAZA_ARI_AWASETE_IPPON', 
         'WAZA_ARI', 
+        'YUKO',
         'HANSOKU_MAKE', 
         'DECISAO', 
         'WO', 
@@ -195,9 +198,11 @@ CREATE TABLE IF NOT EXISTS placar_lutas (
     luta_id UUID PRIMARY KEY REFERENCES lutas(id) ON DELETE CASCADE,
     ippon_branco INT NOT NULL DEFAULT 0,
     wazaari_branco INT NOT NULL DEFAULT 0,
+    yuko_branco INT NOT NULL DEFAULT 0,
     shido_branco INT NOT NULL DEFAULT 0,
     ippon_azul INT NOT NULL DEFAULT 0,
     wazaari_azul INT NOT NULL DEFAULT 0,
+    yuko_azul INT NOT NULL DEFAULT 0,
     shido_azul INT NOT NULL DEFAULT 0,
     osaekomi_ativo BOOLEAN NOT NULL DEFAULT FALSE,
     osaekomi_cor cor_judogi,

@@ -86,9 +86,24 @@ public class CampeonatoRepository : ICampeonatoRepository
                 criado_em AS CriadoEm
             FROM categorias
             WHERE campeonato_id = @CampeonatoId
-            ORDER BY classe, divisao_peso;";
+            ORDER BY classe, sexo, peso_limite_kg;";
 
         return await conn.QueryAsync<Categoria>(new CommandDefinition(sql, new { CampeonatoId = campeonatoId }, cancellationToken: ct));
+    }
+
+    public async Task<Categoria?> ObterCategoriaPorIdAsync(Guid categoriaId, CancellationToken ct = default)
+    {
+        using var conn = _connectionFactory.CreateConnection();
+        const string sql = @"
+            SELECT 
+                id, campeonato_id AS CampeonatoId, classe, divisao_peso AS DivisaoPeso, 
+                peso_limite_kg AS PesoLimiteKg, sexo, tempo_luta_segundos AS TempoLutaSegundos, 
+                tempo_osaekomi_wazaari AS TempoOsaekomiWazaari, tempo_osaekomi_ippon AS TempoOsaekomiIppon, 
+                criado_em AS CriadoEm
+            FROM categorias
+            WHERE id = @Id;";
+
+        return await conn.QuerySingleOrDefaultAsync<Categoria>(new CommandDefinition(sql, new { Id = categoriaId }, cancellationToken: ct));
     }
 
     public async Task CriarCategoriaAsync(Categoria categoria, CancellationToken ct = default)
@@ -114,6 +129,47 @@ public class CampeonatoRepository : ICampeonatoRepository
             categoria.TempoOsaekomiIppon,
             categoria.CriadoEm
         }, cancellationToken: ct));
+    }
+
+    public async Task AtualizarCategoriaAsync(Categoria categoria, CancellationToken ct = default)
+    {
+        using var conn = _connectionFactory.CreateConnection();
+        const string sql = @"
+            UPDATE categorias
+            SET classe = @Classe,
+                divisao_peso = @DivisaoPeso,
+                peso_limite_kg = @PesoLimiteKg,
+                sexo = @Sexo,
+                tempo_luta_segundos = @TempoLutaSegundos,
+                tempo_osaekomi_wazaari = @TempoOsaekomiWazaari,
+                tempo_osaekomi_ippon = @TempoOsaekomiIppon
+            WHERE id = @Id;";
+
+        await conn.ExecuteAsync(new CommandDefinition(sql, new
+        {
+            categoria.Id,
+            categoria.Classe,
+            categoria.DivisaoPeso,
+            categoria.PesoLimiteKg,
+            Sexo = categoria.Sexo.ToUpper(),
+            categoria.TempoLutaSegundos,
+            categoria.TempoOsaekomiWazaari,
+            categoria.TempoOsaekomiIppon
+        }, cancellationToken: ct));
+    }
+
+    public async Task RemoverCategoriaAsync(Guid categoriaId, CancellationToken ct = default)
+    {
+        using var conn = _connectionFactory.CreateConnection();
+        const string sql = @"
+            DELETE FROM pesagens WHERE categoria_id = @Id;
+            DELETE FROM placar_lutas WHERE luta_id IN (SELECT id FROM lutas WHERE chave_id IN (SELECT id FROM chaves WHERE categoria_id = @Id));
+            DELETE FROM eventos_pontuacao WHERE luta_id IN (SELECT id FROM lutas WHERE chave_id IN (SELECT id FROM chaves WHERE categoria_id = @Id));
+            DELETE FROM lutas WHERE chave_id IN (SELECT id FROM chaves WHERE categoria_id = @Id);
+            DELETE FROM chaves WHERE categoria_id = @Id;
+            DELETE FROM categorias WHERE id = @Id;";
+
+        await conn.ExecuteAsync(new CommandDefinition(sql, new { Id = categoriaId }, cancellationToken: ct));
     }
 
     public async Task<IEnumerable<Chave>> ObterChavesAsync(Guid campeonatoId, CancellationToken ct = default)

@@ -162,9 +162,9 @@ public class LutaRepository : ILutaRepository
             );
 
             INSERT INTO placar_lutas (
-                luta_id, ippon_branco, wazaari_branco, shido_branco, ippon_azul, wazaari_azul, shido_azul, cronometro_segundos, em_golden_score, cronometro_rodando, sono_mama, ultima_atualizacao
+                luta_id, ippon_branco, wazaari_branco, yuko_branco, shido_branco, ippon_azul, wazaari_azul, yuko_azul, shido_azul, cronometro_segundos, em_golden_score, cronometro_rodando, sono_mama, ultima_atualizacao
             ) VALUES (
-                @Id, 0, 0, 0, 0, 0, 0, 240, FALSE, FALSE, FALSE, NOW()
+                @Id, 0, 0, 0, 0, 0, 0, 0, 0, 240, FALSE, FALSE, FALSE, NOW()
             ) ON CONFLICT (luta_id) DO NOTHING;";
 
         await conn.ExecuteAsync(new CommandDefinition(sql, new
@@ -204,6 +204,95 @@ public class LutaRepository : ILutaRepository
             VencedorId = vencedorId,
             TipoVitoria = tipoVitoria?.ToString()
         }, cancellationToken: ct));
+
+        if (status == StatusLuta.Finalizada && vencedorId.HasValue)
+        {
+            await AvancarVencedorCopaAsync(lutaId, ct);
+        }
+    }
+
+    public async Task AvancarVencedorCopaAsync(Guid lutaFinalizadaId, CancellationToken ct = default)
+    {
+        var lutaAtual = await ObterPorIdAsync(lutaFinalizadaId, ct);
+        if (lutaAtual == null || !lutaAtual.VencedorId.HasValue || lutaAtual.Fase <= 1)
+            return;
+
+        int proximaFase = lutaAtual.Fase - 1;
+        int proximaOrdem = (lutaAtual.OrdemNaChave + 1) / 2;
+        bool slotBranco = (lutaAtual.OrdemNaChave % 2) == 1;
+
+        using var conn = _connectionFactory.CreateConnection();
+        const string findSql = @"
+            SELECT id, atleta_branco_id AS AtletaBrancoId, atleta_azul_id AS AtletaAzulId, status AS Status
+            FROM lutas
+            WHERE chave_id = @ChaveId AND fase = @ProximaFase AND ordem_na_chave = @ProximaOrdem
+            LIMIT 1;";
+
+        var lutaSeguinte = await conn.QuerySingleOrDefaultAsync<dynamic>(
+            new CommandDefinition(findSql, new
+            {
+                lutaAtual.ChaveId,
+                ProximaFase = proximaFase,
+                ProximaOrdem = proximaOrdem
+            }, cancellationToken: ct));
+
+        if (lutaSeguinte != null)
+        {
+            Guid lutaSeguinteId = (Guid)lutaSeguinte.id;
+            string updateSql = slotBranco
+                ? "UPDATE lutas SET atleta_branco_id = @VencedorId WHERE id = @Id;"
+                : "UPDATE lutas SET atleta_azul_id = @VencedorId WHERE id = @Id;";
+
+            await conn.ExecuteAsync(new CommandDefinition(updateSql, new
+            {
+                Id = lutaSeguinteId,
+                VencedorId = lutaAtual.VencedorId
+            }, cancellationToken: ct));
+
+            // Verifica se a luta irmão (que alimenta o outro lado deste confronto) era um BYE vazio (sem atletas)
+            int ordemIrma = slotBranco ? lutaAtual.OrdemNaChave + 1 : lutaAtual.OrdemNaChave - 1;
+            const string irmaSql = @"
+                SELECT id, atleta_branco_id AS AtletaBrancoId, atleta_azul_id AS AtletaAzulId, vencedor_id AS VencedorId, status AS Status
+                FROM lutas
+                WHERE chave_id = @ChaveId AND fase = @Fase AND ordem_na_chave = @OrdemIrma
+                LIMIT 1;";
+
+            var lutaIrma = await conn.QuerySingleOrDefaultAsync<dynamic>(
+                new CommandDefinition(irmaSql, new
+                {
+                    lutaAtual.ChaveId,
+                    lutaAtual.Fase,
+                    OrdemIrma = ordemIrma
+                }, cancellationToken: ct));
+
+            bool irmaInexistenteOuVazia = lutaIrma == null ||
+                (lutaIrma.atletabrancoid == null && lutaIrma.atletaazulid == null && lutaIrma.vencedorid == null);
+
+            if (irmaInexistenteOuVazia && proximaFase > 1)
+            {
+                // Avança automaticamente por WO/BYE se não houver adversário do outro lado da chave
+                await AtualizarStatusLutaAsync(lutaSeguinteId, StatusLuta.Finalizada, lutaAtual.VencedorId, TipoVitoria.WO, ct);
+            }
+        }
+        else
+        {
+            // Se a luta da próxima fase ainda não existia no banco, cria automaticamente
+            var novaLuta = new Luta
+            {
+                Id = Guid.NewGuid(),
+                ChaveId = lutaAtual.ChaveId,
+                TatameId = lutaAtual.TatameId,
+                AtletaBrancoId = slotBranco ? lutaAtual.VencedorId : null,
+                AtletaAzulId = slotBranco ? null : lutaAtual.VencedorId,
+                Fase = proximaFase,
+                OrdemNaChave = proximaOrdem,
+                OrdemNoTatame = proximaOrdem,
+                Status = StatusLuta.Agendada,
+                TempoLutaSegundos = lutaAtual.TempoLutaSegundos > 0 ? lutaAtual.TempoLutaSegundos : 240,
+                CriadaEm = DateTime.UtcNow
+            };
+            await CriarLutaAsync(novaLuta, ct);
+        }
     }
 
     public async Task AtribuirTatameAsync(Guid lutaId, Guid? tatameId, int? ordemNoTatame, CancellationToken ct = default)

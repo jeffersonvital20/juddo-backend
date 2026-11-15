@@ -20,6 +20,14 @@ public class CampeonatosController : ControllerBase
 
     public record GerarGradeRequest(Guid CategoriaId, Guid? TatameId = null);
 
+    public record SalvarCategoriaRequest(
+        string Classe,
+        string DivisaoPeso,
+        decimal PesoLimiteKg,
+        string Sexo,
+        int TempoLutaSegundos = 240
+    );
+
     /// <summary>
     /// Lista todos os campeonatos cadastrados no sistema.
     /// </summary>
@@ -47,10 +55,10 @@ public class CampeonatosController : ControllerBase
     }
 
     /// <summary>
-    /// Cadastra um novo campeonato com categorias oficiais e tatames (somente Admin).
+    /// Cadastra um novo campeonato com categorias oficiais e tatames (Admin ou Secretaria).
     /// </summary>
     [HttpPost]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Secretaria")]
     [ProducesResponseType(typeof(CampeonatoDto), StatusCodes.Status201Created)]
     public async Task<IActionResult> Criar([FromBody] CriarCampeonatoCommand command)
     {
@@ -59,10 +67,10 @@ public class CampeonatosController : ControllerBase
     }
 
     /// <summary>
-    /// Altera o status do campeonato (EM_ANDAMENTO, FINALIZADO) (somente Admin).
+    /// Altera o status do campeonato (EM_ANDAMENTO, FINALIZADO) (Admin ou Secretaria).
     /// </summary>
     [HttpPut("{id:guid}/status")]
-    [Authorize(Roles = "Admin")]
+    [Authorize(Roles = "Admin,Secretaria")]
     public async Task<IActionResult> AtualizarStatus(Guid id, [FromBody] string status)
     {
         await _mediator.Send(new AtualizarStatusCampeonatoCommand(id, status));
@@ -79,6 +87,68 @@ public class CampeonatosController : ControllerBase
     {
         var result = await _mediator.Send(new ObterCategoriasCampeonatoQuery(id));
         return Ok(result);
+    }
+
+    /// <summary>
+    /// Cadastra uma nova categoria de peso para o campeonato (somente Admin).
+    /// </summary>
+    [HttpPost("{id:guid}/categorias")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(CategoriaDto), StatusCodes.Status201Created)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    public async Task<IActionResult> CriarCategoria(Guid id, [FromBody] SalvarCategoriaRequest req)
+    {
+        try
+        {
+            var result = await _mediator.Send(new CriarCategoriaCommand(
+                id,
+                req.Classe,
+                req.DivisaoPeso,
+                req.PesoLimiteKg,
+                req.Sexo,
+                req.TempoLutaSegundos
+            ));
+            return StatusCode(StatusCodes.Status201Created, result);
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { mensagem = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Atualiza os dados de uma categoria de peso existente (somente Admin).
+    /// </summary>
+    [HttpPut("{id:guid}/categorias/{categoriaId:guid}")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(typeof(CategoriaDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> AtualizarCategoria(Guid id, Guid categoriaId, [FromBody] SalvarCategoriaRequest req)
+    {
+        var result = await _mediator.Send(new AtualizarCategoriaCommand(
+            categoriaId,
+            req.Classe,
+            req.DivisaoPeso,
+            req.PesoLimiteKg,
+            req.Sexo,
+            req.TempoLutaSegundos
+        ));
+        if (result == null) return NotFound(new { mensagem = "Categoria não encontrada." });
+        return Ok(result);
+    }
+
+    /// <summary>
+    /// Remove uma categoria de peso do campeonato (somente Admin).
+    /// </summary>
+    [HttpDelete("{id:guid}/categorias/{categoriaId:guid}")]
+    [Authorize(Roles = "Admin")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> RemoverCategoria(Guid id, Guid categoriaId)
+    {
+        var removido = await _mediator.Send(new RemoverCategoriaCommand(categoriaId));
+        if (!removido) return NotFound(new { mensagem = "Categoria não encontrada." });
+        return Ok(new { mensagem = "Categoria removida com sucesso." });
     }
 
     /// <summary>

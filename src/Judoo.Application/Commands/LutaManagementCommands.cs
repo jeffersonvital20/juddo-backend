@@ -85,6 +85,12 @@ public class AlterarStatusLutaCommandHandler : IRequestHandler<AlterarStatusLuta
             }
         }
 
+        if (request.NovoStatus == StatusLuta.Finalizada && request.VencedorId.HasValue && request.TipoVitoria.HasValue && luta != null && luta.TatameId.HasValue)
+        {
+            var corVencedor = request.VencedorId == luta.AtletaBrancoId ? CorJudogi.Branco : CorJudogi.Azul;
+            await _notificationService.NotificarLutaFinalizadaAsync(luta.TatameId.Value, luta.Id, corVencedor, request.TipoVitoria.Value, cancellationToken);
+        }
+
         return true;
     }
 }
@@ -149,7 +155,8 @@ public class ObterTodasLutasQueryHandler : IRequestHandler<ObterTodasLutasQuery,
                 l.EmGoldenScore,
                 l.TempoLutaSegundos,
                 l.Fase,
-                l.OrdemNaChave
+                l.OrdemNaChave,
+                l.VencedorId
             ));
         }
 
@@ -212,36 +219,99 @@ public class GerarGradeLutasCommandHandler : IRequestHandler<GerarGradeLutasComm
 
         var tatames = (await _tatameRepo.ObterTodosPorCampeonatoAsync(request.CampeonatoId, cancellationToken)).ToList();
         var totalFases = Math.Max(1, (int)Math.Ceiling(Math.Log2(atletasInscritos.Count)));
-        var criadas = new List<LutaDetalhesDto>();
-        int ordem = 1;
+        int lutasPrimeiraFase = 1 << (totalFases - 1); // Ex: 4 atletas -> totalFases=2 -> 2 semifinais
+        int byes = (1 << totalFases) - atletasInscritos.Count;
+        int ordemNoTatameGlobal = 1;
 
-        for (int i = 0; i + 1 < atletasInscritos.Count; i += 2)
+        var lutasPrimeiraRodada = new List<Luta>();
+        int idxAtleta = 0;
+
+        // 1. Cria as lutas da fase inicial (Ex: Oitavas=4, Quartas=3, Semifinal=2, Final=1)
+        for (int m = 1; m <= lutasPrimeiraFase; m++)
         {
             Guid? tatameDestino = request.TatameId
-                ?? (tatames.Count > 0 ? tatames[(ordem - 1) % tatames.Count].Id : null);
+                ?? (tatames.Count > 0 ? tatames[(ordemNoTatameGlobal - 1) % tatames.Count].Id : null);
+
+            Guid? brancoId = idxAtleta < atletasInscritos.Count ? atletasInscritos[idxAtleta++] : null;
+            Guid? azulId = null;
+
+            // Se ainda há lutas completas para preencher (sem BYE neste confronto), aloca o segundo atleta
+            if (m <= (lutasPrimeiraFase - byes) && idxAtleta < atletasInscritos.Count)
+            {
+                azulId = atletasInscritos[idxAtleta++];
+            }
 
             var luta = new Luta
             {
                 Id = Guid.NewGuid(),
                 ChaveId = chave.Id,
                 TatameId = tatameDestino,
-                AtletaBrancoId = atletasInscritos[i],
-                AtletaAzulId = atletasInscritos[i + 1],
-                Fase = 1,
-                OrdemNaChave = ordem,
-                OrdemNoTatame = ordem,
+                AtletaBrancoId = brancoId,
+                AtletaAzulId = azulId,
+                Fase = totalFases,
+                OrdemNaChave = m,
+                OrdemNoTatame = ordemNoTatameGlobal++,
                 Status = StatusLuta.Agendada,
                 TempoLutaSegundos = 240,
                 CriadaEm = DateTime.UtcNow
             };
 
             await _lutaRepo.CriarLutaAsync(luta, cancellationToken);
-            var detalhe = await _mediator.Send(new Queries.ObterLutaDetalhesQuery(luta.Id), cancellationToken);
-            if (detalhe != null) criadas.Add(detalhe);
-            ordem++;
+            lutasPrimeiraRodada.Add(luta);
+        }
+
+        // 2. Cria todas as fases seguintes da Copa até a Grande Final (Fase 1)
+        for (int f = totalFases - 1; f >= 1; f--)
+        {
+            int qtdLutasFase = 1 << (f - 1);
+            for (int m = 1; m <= qtdLutasFase; m++)
+            {
+                Guid? tatameDestino = request.TatameId
+                    ?? (tatames.Count > 0 ? tatames[(ordemNoTatameGlobal - 1) % tatames.Count].Id : null);
+
+                var lutaFaseSeguinte = new Luta
+                {
+                    Id = Guid.NewGuid(),
+                    ChaveId = chave.Id,
+                    TatameId = tatameDestino,
+                    AtletaBrancoId = null,
+                    AtletaAzulId = null,
+                    Fase = f,
+                    OrdemNaChave = m,
+                    OrdemNoTatame = ordemNoTatameGlobal++,
+                    Status = StatusLuta.Agendada,
+                    TempoLutaSegundos = 240,
+                    CriadaEm = DateTime.UtcNow
+                };
+
+                await _lutaRepo.CriarLutaAsync(lutaFaseSeguinte, cancellationToken);
+            }
+        }
+
+        // 3. Processa os BYEs da primeira fase (atletas sem oponente avançam automaticamente para a próxima fase)
+        foreach (var lutaInicial in lutasPrimeiraRodada)
+        {
+            if (lutaInicial.AtletaBrancoId.HasValue && !lutaInicial.AtletaAzulId.HasValue)
+            {
+                await _lutaRepo.AtualizarStatusLutaAsync(
+                    lutaInicial.Id,
+                    StatusLuta.Finalizada,
+                    lutaInicial.AtletaBrancoId,
+                    TipoVitoria.WO,
+                    cancellationToken);
+            }
         }
 
         await _campeonatoRepo.AtualizarChaveGeradaAsync(chave.Id, totalFases, true, cancellationToken);
+
+        var todasDaChave = await _lutaRepo.ObterLutasPorChaveAsync(chave.Id, cancellationToken);
+        var criadas = new List<LutaDetalhesDto>();
+        foreach (var lc in todasDaChave)
+        {
+            var detalhe = await _mediator.Send(new Queries.ObterLutaDetalhesQuery(lc.Id), cancellationToken);
+            if (detalhe != null) criadas.Add(detalhe);
+        }
+
         return criadas;
     }
 }

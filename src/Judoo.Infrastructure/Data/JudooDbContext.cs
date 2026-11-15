@@ -223,9 +223,11 @@ public class JudooDbContext : DbContext
             b.Property(x => x.LutaId).HasColumnName("luta_id");
             b.Property(x => x.IpponBranco).HasColumnName("ippon_branco").HasDefaultValue(0);
             b.Property(x => x.WazaAriBranco).HasColumnName("wazaari_branco").HasDefaultValue(0);
+            b.Property(x => x.YukoBranco).HasColumnName("yuko_branco").HasDefaultValue(0);
             b.Property(x => x.ShidoBranco).HasColumnName("shido_branco").HasDefaultValue(0);
             b.Property(x => x.IpponAzul).HasColumnName("ippon_azul").HasDefaultValue(0);
             b.Property(x => x.WazaAriAzul).HasColumnName("wazaari_azul").HasDefaultValue(0);
+            b.Property(x => x.YukoAzul).HasColumnName("yuko_azul").HasDefaultValue(0);
             b.Property(x => x.ShidoAzul).HasColumnName("shido_azul").HasDefaultValue(0);
             b.Property(x => x.OsaekomiAtivo).HasColumnName("osaekomi_ativo").HasDefaultValue(false);
             b.Property(x => x.OsaekomiCor).HasColumnName("osaekomi_cor").HasConversion<string>().HasMaxLength(20);

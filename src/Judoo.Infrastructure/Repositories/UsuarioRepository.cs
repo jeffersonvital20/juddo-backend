@@ -66,6 +66,29 @@ public class UsuarioRepository : IUsuarioRepository
         }, cancellationToken: ct));
     }
 
+    public async Task AtualizarAsync(Usuario usuario, CancellationToken ct = default)
+    {
+        using var conn = _connectionFactory.CreateConnection();
+        const string sql = @"
+            UPDATE usuarios
+            SET nome = @Nome,
+                email = @Email,
+                senha_hash = @SenhaHash,
+                role = @Role,
+                ativo = @Ativo
+            WHERE id = @Id;";
+
+        await conn.ExecuteAsync(new CommandDefinition(sql, new
+        {
+            usuario.Id,
+            usuario.Nome,
+            usuario.Email,
+            usuario.SenhaHash,
+            Role = usuario.Role.ToString(),
+            usuario.Ativo
+        }, cancellationToken: ct));
+    }
+
     public async Task AtualizarStatusAsync(Guid id, bool ativo, CancellationToken ct = default)
     {
         using var conn = _connectionFactory.CreateConnection();
@@ -75,5 +98,17 @@ public class UsuarioRepository : IUsuarioRepository
             WHERE id = @Id;";
 
         await conn.ExecuteAsync(new CommandDefinition(sql, new { Id = id, Ativo = ativo }, cancellationToken: ct));
+    }
+
+    public async Task RemoverAsync(Guid id, CancellationToken ct = default)
+    {
+        using var conn = _connectionFactory.CreateConnection();
+        const string sql = @"
+            UPDATE pesagens SET aferido_por_usuario_id = NULL WHERE aferido_por_usuario_id = @Id;
+            UPDATE tatames SET mesario_id = NULL WHERE mesario_id = @Id;
+            UPDATE eventos_pontuacao SET registrado_por_usuario_id = NULL WHERE registrado_por_usuario_id = @Id;
+            DELETE FROM usuarios WHERE id = @Id;";
+
+        await conn.ExecuteAsync(new CommandDefinition(sql, new { Id = id }, cancellationToken: ct));
     }
 }

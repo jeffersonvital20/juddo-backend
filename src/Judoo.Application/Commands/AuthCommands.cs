@@ -123,3 +123,75 @@ public class AlterarStatusUsuarioCommandHandler : IRequestHandler<AlterarStatusU
         return true;
     }
 }
+
+public record AtualizarUsuarioCommand(
+    Guid Id,
+    string Nome,
+    string Email,
+    PerfilUsuario Role,
+    string? NovaSenha = null
+) : IRequest<UsuarioDto?>;
+
+public class AtualizarUsuarioCommandHandler : IRequestHandler<AtualizarUsuarioCommand, UsuarioDto?>
+{
+    private readonly IUsuarioRepository _usuarioRepo;
+    private readonly IPasswordHasher _passwordHasher;
+
+    public AtualizarUsuarioCommandHandler(IUsuarioRepository usuarioRepo, IPasswordHasher passwordHasher)
+    {
+        _usuarioRepo = usuarioRepo;
+        _passwordHasher = passwordHasher;
+    }
+
+    public async Task<UsuarioDto?> Handle(AtualizarUsuarioCommand request, CancellationToken cancellationToken)
+    {
+        var usuario = await _usuarioRepo.ObterPorIdAsync(request.Id, cancellationToken);
+        if (usuario == null) return null;
+
+        if (!string.IsNullOrWhiteSpace(request.Nome))
+            usuario.Nome = request.Nome.Trim();
+
+        if (!string.IsNullOrWhiteSpace(request.Email))
+        {
+            var emailNormalizado = request.Email.Trim().ToLowerInvariant();
+            var existente = await _usuarioRepo.ObterPorEmailAsync(emailNormalizado, cancellationToken);
+            if (existente != null && existente.Id != usuario.Id)
+                throw new InvalidOperationException("Já existe outro usuário cadastrado com este e-mail.");
+            usuario.Email = emailNormalizado;
+        }
+
+        if (Enum.IsDefined(typeof(PerfilUsuario), request.Role))
+            usuario.Role = request.Role;
+
+        if (!string.IsNullOrWhiteSpace(request.NovaSenha))
+        {
+            if (request.NovaSenha.Length < 4)
+                throw new ArgumentException("A nova senha deve conter ao menos 4 caracteres.");
+            usuario.SenhaHash = _passwordHasher.Hash(request.NovaSenha);
+        }
+
+        await _usuarioRepo.AtualizarAsync(usuario, cancellationToken);
+        return UsuarioDto.FromDomain(usuario);
+    }
+}
+
+public record RemoverUsuarioCommand(Guid Id) : IRequest<bool>;
+
+public class RemoverUsuarioCommandHandler : IRequestHandler<RemoverUsuarioCommand, bool>
+{
+    private readonly IUsuarioRepository _usuarioRepo;
+
+    public RemoverUsuarioCommandHandler(IUsuarioRepository usuarioRepo)
+    {
+        _usuarioRepo = usuarioRepo;
+    }
+
+    public async Task<bool> Handle(RemoverUsuarioCommand request, CancellationToken cancellationToken)
+    {
+        var usuario = await _usuarioRepo.ObterPorIdAsync(request.Id, cancellationToken);
+        if (usuario == null) return false;
+
+        await _usuarioRepo.RemoverAsync(request.Id, cancellationToken);
+        return true;
+    }
+}

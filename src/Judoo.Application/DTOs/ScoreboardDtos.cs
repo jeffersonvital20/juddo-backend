@@ -15,9 +15,11 @@ public record PlacarLutaDto(
     Guid LutaId,
     int IpponBranco,
     int WazaAriBranco,
+    int YukoBranco,
     int ShidoBranco,
     int IpponAzul,
     int WazaAriAzul,
+    int YukoAzul,
     int ShidoAzul,
     bool OsaekomiAtivo,
     string? OsaekomiCor,
@@ -33,9 +35,11 @@ public record PlacarLutaDto(
         p.LutaId,
         p.IpponBranco,
         p.WazaAriBranco,
+        p.YukoBranco,
         p.ShidoBranco,
         p.IpponAzul,
         p.WazaAriAzul,
+        p.YukoAzul,
         p.ShidoAzul,
         p.OsaekomiAtivo,
         p.OsaekomiCor?.ToString(),
@@ -60,7 +64,8 @@ public record LutaDetalhesDto(
     bool EmGoldenScore,
     int TempoLutaSegundos,
     int Fase,
-    int OrdemNaChave
+    int OrdemNaChave,
+    Guid? VencedorId = null
 );
 
 public record TatameStatusDto(

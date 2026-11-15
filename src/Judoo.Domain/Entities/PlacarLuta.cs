@@ -7,10 +7,12 @@ public class PlacarLuta
     public Guid LutaId { get; set; }
     public int IpponBranco { get; private set; }
     public int WazaAriBranco { get; private set; }
+    public int YukoBranco { get; private set; }
     public int ShidoBranco { get; private set; }
 
     public int IpponAzul { get; private set; }
     public int WazaAriAzul { get; private set; }
+    public int YukoAzul { get; private set; }
     public int ShidoAzul { get; private set; }
 
     public bool OsaekomiAtivo { get; private set; }
@@ -111,6 +113,36 @@ public class PlacarLuta
                 }
                 break;
 
+            case TipoPontuacao.Yuko:
+                if (judogi == CorJudogi.Branco)
+                {
+                    YukoBranco++;
+                    if (EmGoldenScore)
+                    {
+                        return (true, CorJudogi.Branco, TipoVitoria.Yuko);
+                    }
+                }
+                else
+                {
+                    YukoAzul++;
+                    if (EmGoldenScore)
+                    {
+                        return (true, CorJudogi.Azul, TipoVitoria.Yuko);
+                    }
+                }
+                break;
+
+            case TipoPontuacao.CancelarYuko:
+                if (judogi == CorJudogi.Branco && YukoBranco > 0)
+                {
+                    YukoBranco--;
+                }
+                else if (judogi == CorJudogi.Azul && YukoAzul > 0)
+                {
+                    YukoAzul--;
+                }
+                break;
+
             case TipoPontuacao.CancelarWazaAri:
                 if (judogi == CorJudogi.Branco && WazaAriBranco > 0)
                 {
@@ -187,13 +219,15 @@ public class PlacarLuta
         UltimaAtualizacao = DateTime.UtcNow;
     }
 
-    public void SetRawScores(int ipponB, int wazaariB, int shidoB, int ipponA, int wazaariA, int shidoA, bool osaekomi, CorJudogi? corOsae, int tempoOsae, int cronometro, bool goldenScore, bool rodando, bool sonoMama)
+    public void SetRawScores(int ipponB, int wazaariB, int shidoB, int ipponA, int wazaariA, int shidoA, bool osaekomi, CorJudogi? corOsae, int tempoOsae, int cronometro, bool goldenScore, bool rodando, bool sonoMama, int yukoB = 0, int yukoA = 0)
     {
         IpponBranco = ipponB;
         WazaAriBranco = wazaariB;
+        YukoBranco = yukoB;
         ShidoBranco = shidoB;
         IpponAzul = ipponA;
         WazaAriAzul = wazaariA;
+        YukoAzul = yukoA;
         ShidoAzul = shidoA;
         OsaekomiAtivo = osaekomi;
         OsaekomiCor = corOsae;

@@ -31,7 +31,7 @@ public class TatameNotificationService : ITatameNotificationService
         await _hubContext.Clients.Group("arena-geral").PlacarAtualizado(new { TatameId = tatameId, Placar = dto });
     }
 
-    public async Task NotificarCronometroAsync(Guid tatameId, int tempoSegundos, bool rodando, bool goldenScore, CancellationToken ct = default)
+    public async Task NotificarCronometroAsync(Guid tatameId, int tempoSegundos, bool rodando, bool goldenScore, bool sonoMama = false, CancellationToken ct = default)
     {
         var groupName = $"tatame-{tatameId}";
         var payload = new
@@ -40,6 +40,7 @@ public class TatameNotificationService : ITatameNotificationService
             TempoSegundos = tempoSegundos,
             Rodando = rodando,
             GoldenScore = goldenScore,
+            SonoMama = sonoMama,
             Timestamp = DateTime.UtcNow
         };
 

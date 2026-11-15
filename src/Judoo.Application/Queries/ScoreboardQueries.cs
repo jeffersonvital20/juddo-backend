@@ -64,7 +64,8 @@ public class ObterLutaDetalhesQueryHandler : IRequestHandler<ObterLutaDetalhesQu
             luta.EmGoldenScore,
             luta.TempoLutaSegundos,
             luta.Fase,
-            luta.OrdemNaChave
+            luta.OrdemNaChave,
+            luta.VencedorId
         );
     }
 }

@@ -68,6 +68,12 @@ public class RegistrarPontoCommandHandler : IRequestHandler<RegistrarPontoComman
             placar = new PlacarLuta(request.LutaId);
         }
 
+        // Mantém o tempo atual da luta sincronizado com o enviado pela mesa
+        if (request.TempoLutaSegundos >= 0)
+        {
+            placar.CronometroSegundos = request.TempoLutaSegundos;
+        }
+
         // 2. Aplicar regras da FIJ via Domínio
         var (lutaEncerrada, vencedor, tipoVitoria) = placar.AplicarPontuacao(request.Judogi, request.Tipo);
 

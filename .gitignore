@@ -20,5 +20,5 @@ coverage/
 appsettings.Local.json
 *.local.json
 .env
-.env.local
-.env.*.local
+.env.*
+DEPLOY_GCP_GITHUB.md

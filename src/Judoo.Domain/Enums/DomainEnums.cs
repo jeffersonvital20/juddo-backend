@@ -16,9 +16,11 @@ public enum CorJudogi
 
 public enum TipoPontuacao
 {
+    Yuko,
     WazaAri,
     Ippon,
     Shido,
+    CancelarYuko,
     CancelarWazaAri,
     CancelarShido
 }
@@ -28,6 +30,7 @@ public enum TipoVitoria
     Ippon,
     WazaAriAwaseteIppon,
     WazaAri,
+    Yuko,
     HansokuMake,
     Decisao,
     WO,

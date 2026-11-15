@@ -1,7 +1,7 @@
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: judoo-postgres
+    container_name: ${COMPOSE_PROJECT_NAME:-judoo}-postgres
     restart: unless-stopped
     environment:
       POSTGRES_DB: ${POSTGRES_DB:-judoo_db_dev}
@@ -23,7 +23,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: judoo-api
+    container_name: ${COMPOSE_PROJECT_NAME:-judoo}-api
     restart: unless-stopped
     depends_on:
       postgres:

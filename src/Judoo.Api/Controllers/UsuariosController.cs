@@ -29,6 +29,13 @@ public class UsuariosController : ControllerBase
 
     public record AlterarStatusUsuarioRequest(bool Ativo);
 
+    public record AtualizarUsuarioRequest(
+        string Nome,
+        string Email,
+        PerfilUsuario Role,
+        string? NovaSenha = null
+    );
+
     /// <summary>
     /// Lista todos os usuários cadastrados no sistema e seus respectivos perfis.
     /// </summary>
@@ -88,5 +95,44 @@ public class UsuariosController : ControllerBase
         var atualizado = await _mediator.Send(new AlterarStatusUsuarioCommand(id, req.Ativo));
         if (!atualizado) return NotFound(new { mensagem = "Usuário não encontrado." });
         return Ok(new { mensagem = req.Ativo ? "Usuário ativado." : "Usuário desativado." });
+    }
+
+    /// <summary>
+    /// Atualiza nome, e-mail, perfil de acesso e (opcionalmente) senha de um usuário.
+    /// </summary>
+    [HttpPut("{id:guid}")]
+    [ProducesResponseType(typeof(UsuarioDto), StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status400BadRequest)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    [ProducesResponseType(StatusCodes.Status409Conflict)]
+    public async Task<IActionResult> Atualizar(Guid id, [FromBody] AtualizarUsuarioRequest req)
+    {
+        try
+        {
+            var result = await _mediator.Send(new AtualizarUsuarioCommand(id, req.Nome, req.Email, req.Role, req.NovaSenha));
+            if (result == null) return NotFound(new { mensagem = "Usuário não encontrado." });
+            return Ok(result);
+        }
+        catch (InvalidOperationException ex)
+        {
+            return Conflict(new { mensagem = ex.Message });
+        }
+        catch (ArgumentException ex)
+        {
+            return BadRequest(new { mensagem = ex.Message });
+        }
+    }
+
+    /// <summary>
+    /// Remove um usuário do sistema.
+    /// </summary>
+    [HttpDelete("{id:guid}")]
+    [ProducesResponseType(StatusCodes.Status200OK)]
+    [ProducesResponseType(StatusCodes.Status404NotFound)]
+    public async Task<IActionResult> Remover(Guid id)
+    {
+        var removido = await _mediator.Send(new RemoverUsuarioCommand(id));
+        if (!removido) return NotFound(new { mensagem = "Usuário não encontrado." });
+        return Ok(new { mensagem = "Usuário removido com sucesso." });
     }
 }

@@ -129,6 +129,10 @@ using (var scope = app.Services.CreateScope())
     {
         logger.LogInformation("Verificando e aplicando Entity Framework Core Migrations pendentes no ambiente {Environment}...", app.Environment.EnvironmentName);
         dbContext.Database.Migrate();
+        dbContext.Database.ExecuteSqlRaw(@"
+            ALTER TABLE placar_lutas ADD COLUMN IF NOT EXISTS yuko_branco INT NOT NULL DEFAULT 0;
+            ALTER TABLE placar_lutas ADD COLUMN IF NOT EXISTS yuko_azul INT NOT NULL DEFAULT 0;
+        ");
         logger.LogInformation("Migrations aplicadas com sucesso no PostgreSQL.");
     }
     catch (Exception ex)
@@ -154,9 +158,15 @@ using (var scope = app.Services.CreateScope())
 
             foreach (var u in usuariosPadrao)
             {
-                if (await usuarioRepo.ObterPorEmailAsync(u.Email) == null)
+                var existente = await usuarioRepo.ObterPorEmailAsync(u.Email);
+                if (existente == null)
                 {
                     await usuarioRepo.CriarAsync(u);
+                }
+                else if (string.IsNullOrWhiteSpace(existente.SenhaHash) || !existente.SenhaHash.StartsWith("pbkdf2$"))
+                {
+                    existente.SenhaHash = u.SenhaHash;
+                    await usuarioRepo.AtualizarAsync(existente);
                 }
             }
             logger.LogInformation("Usuários padrão verificados/semeados para o ambiente {Environment}.", app.Environment.EnvironmentName);

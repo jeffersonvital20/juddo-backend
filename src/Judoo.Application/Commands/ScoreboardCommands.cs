@@ -41,7 +41,7 @@ public class AtualizarCronometroCommandHandler : IRequestHandler<AtualizarCronom
         placar.UltimaAtualizacao = DateTime.UtcNow;
 
         await _placarRepo.SalvarOuAtualizarAsync(placar, cancellationToken);
-        await _notificationService.NotificarCronometroAsync(request.TatameId, request.CronometroSegundos, request.CronometroRodando, request.EmGoldenScore, cancellationToken);
+        await _notificationService.NotificarCronometroAsync(request.TatameId, request.CronometroSegundos, request.CronometroRodando, request.EmGoldenScore, request.SonoMama, cancellationToken);
 
         return PlacarLutaDto.FromDomain(placar);
     }

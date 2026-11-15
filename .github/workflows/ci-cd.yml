@@ -1,4 +1,4 @@
-name: Judoo Backend - CI/CD Pipeline
+name: Judoo Backend - CI/CD Pipeline (GCP Compute Engine VPS)
 
 on:
   push:
@@ -16,15 +16,98 @@ env:
   DOTNET_VERSION: '8.0.x'
   DOTNET_NOLOGO: true
   DOTNET_CLI_TELEMETRY_OPTOUT: true
-  REGISTRY: ghcr.io
-  IMAGE_NAME: ${{ github.repository }}
 
 jobs:
   # ============================================================================
-  # 1. ETAPA DE BUILD, TESTES (UNITÁRIOS + INTEGRAÇÃO) E VALIDAÇÃO DOCKER
+  # 1. ESTÁGIO DE BUILD (Restauração, Compilação, Publicação e Validação Docker)
   # ============================================================================
-  build-and-test:
-    name: Build & Testes (.NET 8)
+  build:
+    name: 1. Build (.NET 8 & Docker)
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar .NET SDK ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache de pacotes NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Restaurar dependências
+        run: dotnet restore Judoo.sln
+
+      - name: Compilar solução (Release)
+        run: dotnet build Judoo.sln --configuration Release --no-restore
+
+      - name: Publicar Artefato da API
+        run: dotnet publish src/Judoo.Api/Judoo.Api.csproj --configuration Release --no-build --output ./publish
+
+      - name: Upload do Artefato Publicado da API
+        uses: actions/upload-artifact@v4
+        with:
+          name: judoo-api-release
+          path: ./publish
+          retention-days: 7
+
+      - name: Validar Build da Imagem Docker
+        run: docker build -t judoo-api:ci-${{ github.sha }} .
+
+  # ============================================================================
+  # 2. ESTÁGIO DE TESTES UNITÁRIOS (Domínio e Regras FIJ)
+  # ============================================================================
+  unit-tests:
+    name: 2. Testes Unitários
+    needs: build
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout do código
+        uses: actions/checkout@v4
+
+      - name: Configurar .NET SDK ${{ env.DOTNET_VERSION }}
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: ${{ env.DOTNET_VERSION }}
+
+      - name: Cache de pacotes NuGet
+        uses: actions/cache@v4
+        with:
+          path: ~/.nuget/packages
+          key: ${{ runner.os }}-nuget-${{ hashFiles('**/*.csproj') }}
+          restore-keys: |
+            ${{ runner.os }}-nuget-
+
+      - name: Executar Testes Unitários (Judoo.Domain.UnitTests)
+        run: >
+          dotnet test tests/Judoo.Domain.UnitTests/Judoo.Domain.UnitTests.csproj
+          --configuration Release
+          --verbosity normal
+          --settings coverlet.runsettings
+          --logger "trx;LogFileName=unit-tests.trx"
+
+      - name: Upload do Relatório de Testes Unitários e Cobertura
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unit-tests-results
+          path: tests/Judoo.Domain.UnitTests/TestResults/
+          retention-days: 7
+
+  # ============================================================================
+  # 3. ESTÁGIO DE TESTES DE INTEGRAÇÃO (API, CQRS, Repositórios e SignalR)
+  # ============================================================================
+  integration-tests:
+    name: 3. Testes de Integração
+    needs: unit-tests
     runs-on: ubuntu-latest
 
     env:
@@ -55,279 +138,213 @@ jobs:
           restore-keys: |
             ${{ runner.os }}-nuget-
 
-      - name: Restaurar dependências
-        run: dotnet restore Judoo.sln
+      - name: Executar Testes de Integração (Judoo.IntegrationTests)
+        run: >
+          dotnet test tests/Judoo.IntegrationTests/Judoo.IntegrationTests.csproj
+          --configuration Release
+          --verbosity normal
+          --settings coverlet.runsettings
+          --logger "trx;LogFileName=integration-tests.trx"
 
-      - name: Compilar solução (Release)
-        run: dotnet build Judoo.sln --configuration Release --no-restore
-
-      - name: Executar Testes Unitários e de Integração (com Cobertura)
-        run: dotnet test Judoo.sln --configuration Release --no-build --verbosity normal --settings coverlet.runsettings --logger "trx;LogFileName=test-results.trx"
-
-      - name: Publicar Artefato da API
-        run: dotnet publish src/Judoo.Api/Judoo.Api.csproj --configuration Release --no-build --output ./publish
-
-      - name: Upload do Artefato Publicado
+      - name: Upload do Relatório de Testes de Integração e Cobertura
+        if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: judoo-api-release
-          path: ./publish
+          name: integration-tests-results
+          path: tests/Judoo.IntegrationTests/TestResults/
           retention-days: 7
 
-      - name: Validar Build da Imagem Docker
-        run: docker build -t judoo-api:ci-${{ github.sha }} .
-
   # ============================================================================
-  # 2. DEPLOY AMBIENTE DE DESENVOLVIMENTO (Apenas push na branch 'dev')
+  # 4. DEPLOY VPS GCP - DESENVOLVIMENTO (Apenas push na branch 'dev')
   # ============================================================================
   deploy-dev:
-    name: Deploy - Desenvolvimento (dev)
-    needs: build-and-test
+    name: 4. Deploy VPS GCP - Desenvolvimento (dev)
+    needs: [build, unit-tests, integration-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/dev'
     runs-on: ubuntu-latest
     environment:
       name: development
-    permissions:
-      contents: read
-      packages: write
 
     env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER || 'ubuntu' }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
       ASPNETCORE_ENVIRONMENT: Development
-      ASPNETCORE_URLS: http://+:8080
-      API_PORT: ${{ secrets.API_PORT || '8080' }}
-      POSTGRES_HOST: ${{ secrets.POSTGRES_HOST || 'postgres' }}
-      POSTGRES_PORT: ${{ secrets.POSTGRES_PORT || '5433' }}
+      API_PORT: ${{ secrets.API_PORT_DEV || '8082' }}
+      POSTGRES_PORT: ${{ secrets.POSTGRES_PORT_DEV || '5434' }}
       POSTGRES_DB: ${{ secrets.POSTGRES_DB_DEV || 'judoo_db_dev' }}
       POSTGRES_USER: ${{ secrets.POSTGRES_USER || 'judoo_user' }}
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'judoo_secret' }}
-      ConnectionStrings__DefaultConnection: ${{ secrets.DB_CONNECTION_STRING_DEV || format('Host={0};Port=5432;Database={1};Username={2};Password={3};', secrets.POSTGRES_HOST || 'postgres', secrets.POSTGRES_DB_DEV || 'judoo_db_dev', secrets.POSTGRES_USER || 'judoo_user', secrets.POSTGRES_PASSWORD || 'judoo_secret') }}
-      Jwt__Key: ${{ secrets.JWT_KEY || 'JudooSuperSecretKeyForJwtAuthentication2026!' }}
-      Jwt__Issuer: ${{ secrets.JWT_ISSUER || 'Judoo.Api' }}
-      Jwt__Audience: ${{ secrets.JWT_AUDIENCE || 'Judoo.Clients' }}
-      Swagger__Enabled: "true"
-      Swagger__RoutePrefix: ""
-      Security__SeedDemoUsers: "true"
+      JWT_KEY: ${{ secrets.JWT_KEY || 'JudooSuperSecretKeyForJwtAuthentication2026!' }}
+      JWT_ISSUER: ${{ secrets.JWT_ISSUER || 'Judoo.Api' }}
+      JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE || 'Judoo.Clients' }}
 
     steps:
-      - name: Checkout do código
-        uses: actions/checkout@v4
-
-      - name: Gerar arquivo .env de Desenvolvimento a partir das Secrets
-        run: |
-          cat <<EOF > .env
-          ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
-          ASPNETCORE_URLS=${ASPNETCORE_URLS}
-          API_PORT=${API_PORT}
-          POSTGRES_HOST=${POSTGRES_HOST}
-          POSTGRES_PORT=${POSTGRES_PORT}
-          POSTGRES_DB=${POSTGRES_DB}
-          POSTGRES_USER=${POSTGRES_USER}
-          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-          ConnectionStrings__DefaultConnection=${ConnectionStrings__DefaultConnection}
-          JWT_KEY=${Jwt__Key}
-          JWT_ISSUER=${Jwt__Issuer}
-          JWT_AUDIENCE=${Jwt__Audience}
-          Swagger__Enabled=${Swagger__Enabled}
-          Swagger__RoutePrefix=${Swagger__RoutePrefix}
-          Security__SeedDemoUsers=${Security__SeedDemoUsers}
-          EOF
-
-      - name: Download do Artefato da API
-        uses: actions/download-artifact@v4
+      - name: Deploy via SSH na VM do Google Cloud (Dev)
+        if: env.VPS_HOST != ''
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          name: judoo-api-release
-          path: ./publish
+          host: ${{ env.VPS_HOST }}
+          username: ${{ env.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ env.VPS_PORT }}
+          script: |
+            set -e
+            mkdir -p /opt/judoo/dev
+            if [ ! -d "/opt/judoo/dev/.git" ]; then
+              git clone -b dev https://github.com/${{ github.repository }}.git /opt/judoo/dev
+            fi
+            cd /opt/judoo/dev
+            git fetch origin dev
+            git reset --hard origin/dev
 
-      - name: Login no GitHub Container Registry (GHCR)
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+            cat <<EOF > .env
+            ASPNETCORE_ENVIRONMENT=${{ env.ASPNETCORE_ENVIRONMENT }}
+            API_PORT=${{ env.API_PORT }}
+            POSTGRES_PORT=${{ env.POSTGRES_PORT }}
+            POSTGRES_DB=${{ env.POSTGRES_DB }}
+            POSTGRES_USER=${{ env.POSTGRES_USER }}
+            POSTGRES_PASSWORD=${{ env.POSTGRES_PASSWORD }}
+            JWT_KEY=${{ env.JWT_KEY }}
+            JWT_ISSUER=${{ env.JWT_ISSUER }}
+            JWT_AUDIENCE=${{ env.JWT_AUDIENCE }}
+            EOF
 
-      - name: Build e Push da Imagem Docker (Dev)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev-${{ github.sha }}
+            docker compose -p judoo-dev up -d --build --remove-orphans
+            docker image prune -f
 
       - name: Resumo do Deploy (Dev)
         run: |
-          echo "### 🚀 Deploy para Desenvolvimento Concluído" >> $GITHUB_STEP_SUMMARY
+          echo "### 🚀 Deploy VPS GCP (Desenvolvimento) Concluído" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: \`dev\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **ASPNETCORE_ENVIRONMENT**: \`${ASPNETCORE_ENVIRONMENT}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Database**: \`${POSTGRES_DB}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Imagem**: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:dev\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL API Dev**: \`http://${{ env.VPS_HOST || 'SEU_IP_VM' }}:${{ env.API_PORT }}\`" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
-  # 3. DEPLOY AMBIENTE DE HOMOLOGAÇÃO (Apenas push na branch 'homolog')
+  # 5. DEPLOY VPS GCP - HOMOLOGAÇÃO (Apenas push na branch 'homolog')
   # ============================================================================
   deploy-homolog:
-    name: Deploy - Homologação (homolog)
-    needs: build-and-test
+    name: 4. Deploy VPS GCP - Homologação (homolog)
+    needs: [build, unit-tests, integration-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/homolog'
     runs-on: ubuntu-latest
     environment:
       name: homologacao
-    permissions:
-      contents: read
-      packages: write
 
     env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER || 'ubuntu' }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
       ASPNETCORE_ENVIRONMENT: Staging
-      ASPNETCORE_URLS: http://+:8080
-      API_PORT: ${{ secrets.API_PORT || '8080' }}
-      POSTGRES_HOST: ${{ secrets.POSTGRES_HOST || 'postgres' }}
-      POSTGRES_PORT: ${{ secrets.POSTGRES_PORT || '5432' }}
+      API_PORT: ${{ secrets.API_PORT_STAGING || '8081' }}
+      POSTGRES_PORT: ${{ secrets.POSTGRES_PORT_STAGING || '5433' }}
       POSTGRES_DB: ${{ secrets.POSTGRES_DB_STAGING || 'judoo_db_staging' }}
       POSTGRES_USER: ${{ secrets.POSTGRES_USER || 'judoo_user' }}
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'judoo_secret' }}
-      ConnectionStrings__DefaultConnection: ${{ secrets.DB_CONNECTION_STRING_STAGING || format('Host={0};Port=5432;Database={1};Username={2};Password={3};', secrets.POSTGRES_HOST || 'postgres', secrets.POSTGRES_DB_STAGING || 'judoo_db_staging', secrets.POSTGRES_USER || 'judoo_user', secrets.POSTGRES_PASSWORD || 'judoo_secret') }}
-      Jwt__Key: ${{ secrets.JWT_KEY || 'JudooSuperSecretKeyForJwtAuthentication2026!' }}
-      Jwt__Issuer: ${{ secrets.JWT_ISSUER || 'Judoo.Api' }}
-      Jwt__Audience: ${{ secrets.JWT_AUDIENCE || 'Judoo.Clients' }}
-      Swagger__Enabled: "true"
-      Swagger__RoutePrefix: "swagger"
-      Security__SeedDemoUsers: "true"
+      JWT_KEY: ${{ secrets.JWT_KEY || 'JudooSuperSecretKeyForJwtAuthentication2026!' }}
+      JWT_ISSUER: ${{ secrets.JWT_ISSUER || 'Judoo.Api' }}
+      JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE || 'Judoo.Clients' }}
 
     steps:
-      - name: Checkout do código
-        uses: actions/checkout@v4
-
-      - name: Gerar arquivo .env de Homologação a partir das Secrets
-        run: |
-          cat <<EOF > .env
-          ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
-          ASPNETCORE_URLS=${ASPNETCORE_URLS}
-          API_PORT=${API_PORT}
-          POSTGRES_HOST=${POSTGRES_HOST}
-          POSTGRES_PORT=${POSTGRES_PORT}
-          POSTGRES_DB=${POSTGRES_DB}
-          POSTGRES_USER=${POSTGRES_USER}
-          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-          ConnectionStrings__DefaultConnection=${ConnectionStrings__DefaultConnection}
-          JWT_KEY=${Jwt__Key}
-          JWT_ISSUER=${Jwt__Issuer}
-          JWT_AUDIENCE=${Jwt__Audience}
-          Swagger__Enabled=${Swagger__Enabled}
-          Swagger__RoutePrefix=${Swagger__RoutePrefix}
-          Security__SeedDemoUsers=${Security__SeedDemoUsers}
-          EOF
-
-      - name: Download do Artefato da API
-        uses: actions/download-artifact@v4
+      - name: Deploy via SSH na VM do Google Cloud (Homologação)
+        if: env.VPS_HOST != ''
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          name: judoo-api-release
-          path: ./publish
+          host: ${{ env.VPS_HOST }}
+          username: ${{ env.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ env.VPS_PORT }}
+          script: |
+            set -e
+            mkdir -p /opt/judoo/homolog
+            if [ ! -d "/opt/judoo/homolog/.git" ]; then
+              git clone -b homolog https://github.com/${{ github.repository }}.git /opt/judoo/homolog
+            fi
+            cd /opt/judoo/homolog
+            git fetch origin homolog
+            git reset --hard origin/homolog
 
-      - name: Login no GitHub Container Registry (GHCR)
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+            cat <<EOF > .env
+            ASPNETCORE_ENVIRONMENT=${{ env.ASPNETCORE_ENVIRONMENT }}
+            API_PORT=${{ env.API_PORT }}
+            POSTGRES_PORT=${{ env.POSTGRES_PORT }}
+            POSTGRES_DB=${{ env.POSTGRES_DB }}
+            POSTGRES_USER=${{ env.POSTGRES_USER }}
+            POSTGRES_PASSWORD=${{ env.POSTGRES_PASSWORD }}
+            JWT_KEY=${{ env.JWT_KEY }}
+            JWT_ISSUER=${{ env.JWT_ISSUER }}
+            JWT_AUDIENCE=${{ env.JWT_AUDIENCE }}
+            EOF
 
-      - name: Build e Push da Imagem Docker (Homologação)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:homolog
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:homolog-${{ github.sha }}
+            docker compose -p judoo-homolog up -d --build --remove-orphans
+            docker image prune -f
 
       - name: Resumo do Deploy (Homologação)
         run: |
-          echo "### 🧪 Deploy para Homologação Concluído" >> $GITHUB_STEP_SUMMARY
+          echo "### 🧪 Deploy VPS GCP (Homologação) Concluído" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: \`homolog\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **ASPNETCORE_ENVIRONMENT**: \`${ASPNETCORE_ENVIRONMENT}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Database**: \`${POSTGRES_DB}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Imagem**: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:homolog\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL API Homologação**: \`http://${{ env.VPS_HOST || 'SEU_IP_VM' }}:${{ env.API_PORT }}/swagger\`" >> $GITHUB_STEP_SUMMARY
 
   # ============================================================================
-  # 4. DEPLOY AMBIENTE DE PRODUÇÃO (Somente em commit/push na branch 'main')
+  # 6. DEPLOY VPS GCP - PRODUÇÃO (Somente em commit/push na branch 'main')
   # ============================================================================
   deploy-prod:
-    name: Deploy - Produção (main)
-    needs: build-and-test
+    name: 4. Deploy VPS GCP - Produção (main)
+    needs: [build, unit-tests, integration-tests]
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
     environment:
       name: production
-    permissions:
-      contents: read
-      packages: write
 
     env:
+      VPS_HOST: ${{ secrets.VPS_HOST }}
+      VPS_USER: ${{ secrets.VPS_USER || 'ubuntu' }}
+      VPS_PORT: ${{ secrets.VPS_PORT || '22' }}
       ASPNETCORE_ENVIRONMENT: Production
-      ASPNETCORE_URLS: http://+:8080
-      API_PORT: ${{ secrets.API_PORT || '8080' }}
-      POSTGRES_HOST: ${{ secrets.POSTGRES_HOST || 'postgres' }}
-      POSTGRES_PORT: ${{ secrets.POSTGRES_PORT || '5432' }}
+      API_PORT: ${{ secrets.API_PORT_PROD || '8080' }}
+      POSTGRES_PORT: ${{ secrets.POSTGRES_PORT_PROD || '5432' }}
       POSTGRES_DB: ${{ secrets.POSTGRES_DB_PROD || 'judoo_db_prod' }}
       POSTGRES_USER: ${{ secrets.POSTGRES_USER || 'judoo_user' }}
       POSTGRES_PASSWORD: ${{ secrets.POSTGRES_PASSWORD || 'judoo_secret' }}
-      ConnectionStrings__DefaultConnection: ${{ secrets.DB_CONNECTION_STRING_PROD || format('Host={0};Port=5432;Database={1};Username={2};Password={3};', secrets.POSTGRES_HOST || 'postgres', secrets.POSTGRES_DB_PROD || 'judoo_db_prod', secrets.POSTGRES_USER || 'judoo_user', secrets.POSTGRES_PASSWORD || 'judoo_secret') }}
-      Jwt__Key: ${{ secrets.JWT_KEY || 'JudooSuperSecretKeyForJwtAuthentication2026!' }}
-      Jwt__Issuer: ${{ secrets.JWT_ISSUER || 'Judoo.Api' }}
-      Jwt__Audience: ${{ secrets.JWT_AUDIENCE || 'Judoo.Clients' }}
-      Swagger__Enabled: "false"
-      Swagger__RoutePrefix: "swagger"
-      Security__SeedDemoUsers: "false"
+      JWT_KEY: ${{ secrets.JWT_KEY || 'JudooSuperSecretKeyForJwtAuthentication2026!' }}
+      JWT_ISSUER: ${{ secrets.JWT_ISSUER || 'Judoo.Api' }}
+      JWT_AUDIENCE: ${{ secrets.JWT_AUDIENCE || 'Judoo.Clients' }}
 
     steps:
-      - name: Checkout do código
-        uses: actions/checkout@v4
-
-      - name: Gerar arquivo .env de Produção a partir das Secrets
-        run: |
-          cat <<EOF > .env
-          ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT}
-          ASPNETCORE_URLS=${ASPNETCORE_URLS}
-          API_PORT=${API_PORT}
-          POSTGRES_HOST=${POSTGRES_HOST}
-          POSTGRES_PORT=${POSTGRES_PORT}
-          POSTGRES_DB=${POSTGRES_DB}
-          POSTGRES_USER=${POSTGRES_USER}
-          POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
-          ConnectionStrings__DefaultConnection=${ConnectionStrings__DefaultConnection}
-          JWT_KEY=${Jwt__Key}
-          JWT_ISSUER=${Jwt__Issuer}
-          JWT_AUDIENCE=${Jwt__Audience}
-          Swagger__Enabled=${Swagger__Enabled}
-          Swagger__RoutePrefix=${Swagger__RoutePrefix}
-          Security__SeedDemoUsers=${Security__SeedDemoUsers}
-          EOF
-
-      - name: Download do Artefato da API
-        uses: actions/download-artifact@v4
+      - name: Deploy via SSH na VM do Google Cloud (Produção)
+        if: env.VPS_HOST != ''
+        uses: appleboy/ssh-action@v1.0.3
         with:
-          name: judoo-api-release
-          path: ./publish
+          host: ${{ env.VPS_HOST }}
+          username: ${{ env.VPS_USER }}
+          key: ${{ secrets.VPS_SSH_KEY }}
+          port: ${{ env.VPS_PORT }}
+          script: |
+            set -e
+            mkdir -p /opt/judoo/prod
+            if [ ! -d "/opt/judoo/prod/.git" ]; then
+              git clone -b main https://github.com/${{ github.repository }}.git /opt/judoo/prod
+            fi
+            cd /opt/judoo/prod
+            git fetch origin main
+            git reset --hard origin/main
 
-      - name: Login no GitHub Container Registry (GHCR)
-        uses: docker/login-action@v3
-        with:
-          registry: ${{ env.REGISTRY }}
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+            cat <<EOF > .env
+            ASPNETCORE_ENVIRONMENT=${{ env.ASPNETCORE_ENVIRONMENT }}
+            API_PORT=${{ env.API_PORT }}
+            POSTGRES_PORT=${{ env.POSTGRES_PORT }}
+            POSTGRES_DB=${{ env.POSTGRES_DB }}
+            POSTGRES_USER=${{ env.POSTGRES_USER }}
+            POSTGRES_PASSWORD=${{ env.POSTGRES_PASSWORD }}
+            JWT_KEY=${{ env.JWT_KEY }}
+            JWT_ISSUER=${{ env.JWT_ISSUER }}
+            JWT_AUDIENCE=${{ env.JWT_AUDIENCE }}
+            EOF
 
-      - name: Build e Push da Imagem Docker (Produção)
-        uses: docker/build-push-action@v6
-        with:
-          context: .
-          push: true
-          tags: |
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
-            ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:prod-${{ github.sha }}
+            docker compose -p judoo-prod up -d --build --remove-orphans
+            docker image prune -f
 
       - name: Resumo do Deploy (Produção)
         run: |
-          echo "### 🏆 Deploy para Produção Concluído" >> $GITHUB_STEP_SUMMARY
+          echo "### 🏆 Deploy VPS GCP (Produção) Concluído" >> $GITHUB_STEP_SUMMARY
           echo "- **Branch**: \`main\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **ASPNETCORE_ENVIRONMENT**: \`${ASPNETCORE_ENVIRONMENT}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Database**: \`${POSTGRES_DB}\`" >> $GITHUB_STEP_SUMMARY
-          echo "- **Imagem**: \`${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- **URL API Produção**: \`http://${{ env.VPS_HOST || 'SEU_IP_VM' }}:${{ env.API_PORT }}\`" >> $GITHUB_STEP_SUMMARY
