@@ -189,9 +189,9 @@ public class DomainEntitiesTests
     {
         Assert.Equal(4, Enum.GetValues<PerfilUsuario>().Length);
         Assert.Equal(2, Enum.GetValues<CorJudogi>().Length);
-        Assert.Equal(5, Enum.GetValues<TipoPontuacao>().Length);
+        Assert.Equal(7, Enum.GetValues<TipoPontuacao>().Length); // Yuko, WazaAri, Ippon, Shido, CancelarYuko, CancelarWazaAri, CancelarShido
         Assert.Equal(6, Enum.GetValues<StatusLuta>().Length);
-        Assert.Equal(7, Enum.GetValues<TipoVitoria>().Length);
+        Assert.Equal(8, Enum.GetValues<TipoVitoria>().Length); // Ippon, WazaAriAwaseteIppon, WazaAri, Yuko, HansokuMake, Decisao, WO, Desistencia
         Assert.Equal(4, Enum.GetValues<StatusTatame>().Length);
     }
 }
