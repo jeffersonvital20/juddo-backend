@@ -1,3 +1,5 @@
+> **Nota de Arquitetura**: Este projeto segue rigorosamente as diretrizes e padrões da **Linha B**.
+
 # 🥋 Judoo Backend API — Sistema Corporativo de Gestão de Torneios de Judô (FIJ)
 
 API de alta performance e baixa latência desenvolvida em **.NET 8** para o gerenciamento em tempo real de campeonatos de Judô segundo o regulamento oficial da **Federação Internacional de Judô (FIJ)**.
