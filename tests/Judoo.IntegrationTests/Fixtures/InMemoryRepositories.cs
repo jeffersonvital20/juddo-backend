@@ -41,12 +41,24 @@ public class InMemoryUsuarioRepository : IUsuarioRepository
         return Task.CompletedTask;
     }
 
+    public Task AtualizarAsync(Usuario usuario, CancellationToken ct = default)
+    {
+        _store.Usuarios[usuario.Id] = usuario;
+        return Task.CompletedTask;
+    }
+
     public Task AtualizarStatusAsync(Guid id, bool ativo, CancellationToken ct = default)
     {
         if (_store.Usuarios.TryGetValue(id, out var u))
         {
             u.Ativo = ativo;
         }
+        return Task.CompletedTask;
+    }
+
+    public Task RemoverAsync(Guid id, CancellationToken ct = default)
+    {
+        _store.Usuarios.TryRemove(id, out _);
         return Task.CompletedTask;
     }
 }
@@ -81,9 +93,24 @@ public class InMemoryCampeonatoRepository : ICampeonatoRepository
     public Task<IEnumerable<Categoria>> ObterCategoriasAsync(Guid campeonatoId, CancellationToken ct = default)
         => Task.FromResult<IEnumerable<Categoria>>(_store.Categorias.Values.Where(c => c.CampeonatoId == campeonatoId).ToList());
 
+    public Task<Categoria?> ObterCategoriaPorIdAsync(Guid categoriaId, CancellationToken ct = default)
+        => Task.FromResult(_store.Categorias.TryGetValue(categoriaId, out var cat) ? cat : null);
+
     public Task CriarCategoriaAsync(Categoria categoria, CancellationToken ct = default)
     {
         _store.Categorias[categoria.Id] = categoria;
+        return Task.CompletedTask;
+    }
+
+    public Task AtualizarCategoriaAsync(Categoria categoria, CancellationToken ct = default)
+    {
+        _store.Categorias[categoria.Id] = categoria;
+        return Task.CompletedTask;
+    }
+
+    public Task RemoverCategoriaAsync(Guid categoriaId, CancellationToken ct = default)
+    {
+        _store.Categorias.TryRemove(categoriaId, out _);
         return Task.CompletedTask;
     }
 
@@ -263,6 +290,11 @@ public class InMemoryLutaRepository : ILutaRepository
             luta.VencedorId = vencedorId;
             luta.TipoVitoria = tipoVitoria;
         }
+        return Task.CompletedTask;
+    }
+
+    public Task AvancarVencedorCopaAsync(Guid lutaFinalizadaId, CancellationToken ct = default)
+    {
         return Task.CompletedTask;
     }
 

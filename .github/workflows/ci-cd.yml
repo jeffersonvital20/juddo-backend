@@ -198,6 +198,7 @@ jobs:
             git fetch origin dev
             git reset --hard origin/dev
 
+            # Dev
             cat <<EOF > .env
             ASPNETCORE_ENVIRONMENT=${{ env.ASPNETCORE_ENVIRONMENT }}
             API_PORT=${{ env.API_PORT }}
@@ -205,9 +206,16 @@ jobs:
             POSTGRES_DB=${{ env.POSTGRES_DB }}
             POSTGRES_USER=${{ env.POSTGRES_USER }}
             POSTGRES_PASSWORD=${{ env.POSTGRES_PASSWORD }}
+            ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=${{ env.POSTGRES_DB }};Username=${{ env.POSTGRES_USER }};Password=${{ env.POSTGRES_PASSWORD }};
+            Jwt__Key=${{ env.JWT_KEY }}
+            Jwt__Issuer=${{ env.JWT_ISSUER }}
+            Jwt__Audience=${{ env.JWT_AUDIENCE }}
             JWT_KEY=${{ env.JWT_KEY }}
             JWT_ISSUER=${{ env.JWT_ISSUER }}
             JWT_AUDIENCE=${{ env.JWT_AUDIENCE }}
+            Swagger__Enabled=true
+            Swagger__RoutePrefix=
+            Security__SeedDemoUsers=true
             EOF
 
             docker compose -p judoo-dev up -d --build --remove-orphans
@@ -263,6 +271,7 @@ jobs:
             git fetch origin homolog
             git reset --hard origin/homolog
 
+            # Homolog
             cat <<EOF > .env
             ASPNETCORE_ENVIRONMENT=${{ env.ASPNETCORE_ENVIRONMENT }}
             API_PORT=${{ env.API_PORT }}
@@ -270,9 +279,16 @@ jobs:
             POSTGRES_DB=${{ env.POSTGRES_DB }}
             POSTGRES_USER=${{ env.POSTGRES_USER }}
             POSTGRES_PASSWORD=${{ env.POSTGRES_PASSWORD }}
+            ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=${{ env.POSTGRES_DB }};Username=${{ env.POSTGRES_USER }};Password=${{ env.POSTGRES_PASSWORD }};
+            Jwt__Key=${{ env.JWT_KEY }}
+            Jwt__Issuer=${{ env.JWT_ISSUER }}
+            Jwt__Audience=${{ env.JWT_AUDIENCE }}
             JWT_KEY=${{ env.JWT_KEY }}
             JWT_ISSUER=${{ env.JWT_ISSUER }}
             JWT_AUDIENCE=${{ env.JWT_AUDIENCE }}
+            Swagger__Enabled=true
+            Swagger__RoutePrefix=swagger
+            Security__SeedDemoUsers=true
             EOF
 
             docker compose -p judoo-homolog up -d --build --remove-orphans
@@ -328,6 +344,7 @@ jobs:
             git fetch origin main
             git reset --hard origin/main
 
+            # Prod
             cat <<EOF > .env
             ASPNETCORE_ENVIRONMENT=${{ env.ASPNETCORE_ENVIRONMENT }}
             API_PORT=${{ env.API_PORT }}
@@ -335,9 +352,16 @@ jobs:
             POSTGRES_DB=${{ env.POSTGRES_DB }}
             POSTGRES_USER=${{ env.POSTGRES_USER }}
             POSTGRES_PASSWORD=${{ env.POSTGRES_PASSWORD }}
+            ConnectionStrings__DefaultConnection=Host=postgres;Port=5432;Database=${{ env.POSTGRES_DB }};Username=${{ env.POSTGRES_USER }};Password=${{ env.POSTGRES_PASSWORD }};
+            Jwt__Key=${{ env.JWT_KEY }}
+            Jwt__Issuer=${{ env.JWT_ISSUER }}
+            Jwt__Audience=${{ env.JWT_AUDIENCE }}
             JWT_KEY=${{ env.JWT_KEY }}
             JWT_ISSUER=${{ env.JWT_ISSUER }}
             JWT_AUDIENCE=${{ env.JWT_AUDIENCE }}
+            Swagger__Enabled=false
+            Swagger__RoutePrefix=swagger
+            Security__SeedDemoUsers=false
             EOF
 
             docker compose -p judoo-prod up -d --build --remove-orphans
