@@ -1,4 +1,4 @@
-> **Nota de Arquitetura**: Este projeto segue rigorosamente as diretrizes e padrões da **Linha B**.
+> **Nota de Arquitetura**: Este projeto segue as diretrizes e padrões da **Linha B**.
 
 # 🥋 Judoo Backend API — Sistema Corporativo de Gestão de Torneios de Judô (FIJ)
 
@@ -109,22 +109,62 @@ docker compose down
 
 ---
 
-## 🧪 Como Executar os Testes e Cobertura
+## 🏛️ Padrões de Projeto (Design Patterns) Justificados (M1)
 
-Para rodar todos os testes (unitários + integração):
+1. **CQRS + Mediator (`MediatR`)**:
+   - **Justificativa**: Separação estrita entre operações de escrita e leitura. Commands utilizam o Entity Framework Core para garantir consistência transacional e regras de negócio da FIJ. Queries utilizam o Dapper para consultas de placar e chaves em tempo real em microssegundos.
+2. **Hybrid Repository & Unit of Work**:
+   - **Justificativa**: Abstração da camada de persistência permitindo migrações automáticas via EF Core e queries de alto throughput via Dapper sem acoplar a camada de domínio.
+3. **Observer Pattern (`ASP.NET Core SignalR`)**:
+   - **Justificativa**: Difusão assíncrona bidirecional de eventos do tatame (pontos, faltas, cronômetro) para todos os clientes conectados sem polling HTTP.
+
+---
+
+## 🧪 Como Executar os Testes e Cobertura Mínima (M2)
+
+O projeto possui **cobertura mínima de 90% declarada** no arquivo `coverlet.runsettings`:
 
 ```bash
+# Executar todos os testes (unitários + integração)
 dotnet test Judoo.sln --configuration Release
-```
 
-Para rodar separadamente por estágio:
+# Executar com relatório de cobertura Coverlet
+dotnet test Judoo.sln --collect:"XPlat Code Coverage" --settings coverlet.runsettings
 
-```bash
-# Apenas Testes Unitários
+# Apenas Testes Unitários de Domínio
 dotnet test tests/Judoo.Domain.UnitTests/Judoo.Domain.UnitTests.csproj
 
 # Apenas Testes de Integração
 dotnet test tests/Judoo.IntegrationTests/Judoo.IntegrationTests.csproj
 ```
+
+---
+
+## 📊 Observabilidade, Métricas Prometheus e SLO (M3)
+
+- **Logs Estruturados**: Logs no padrão JSON via `ILogger` com correlação de requests e severidade.
+- **Endpoint de Métricas**: `http://localhost:8080/metrics` expondo métricas no formato Prometheus:
+  - `judoo_uptime_seconds`: Tempo de atividade da aplicação.
+  - `judoo_memory_allocated_bytes`: Consumo de memória gerenciada do runtime.
+- **SLO (Service Level Objective) Oficial**:
+  - **Latência $p95$**: $99\%$ das requisições REST da API devem responder em menos de **$200\text{ms}$** (`p95 < 200ms`).
+  - **Disponibilidade**: Disponibilidade da API e Hub SignalR $\ge 99.5\%$.
+
+---
+
+## 📑 Registros de Decisão Arquitetural (ADR) (M4)
+
+Decisões de arquitetura documentadas no padrão internacional **MADR**:
+- **[ADR-0001: Adoção de Clean Architecture, CQRS e SignalR para Torneios em Tempo Real](docs/adr/0001-adocao-clean-architecture-cqrs-signalr.md)**
+
+---
+
+## ⚡ OpenAPI & Smoke Test de Performance com k6 (M4)
+
+- **OpenAPI 3.0**: Especificação formal do endpoint principal disponível em [`openapi/openapi.json`](openapi/openapi.json).
+- **Smoke Test k6 com p95 medido**: Script disponível em [`k6/smoke-test-campeonatos.js`](k6/smoke-test-campeonatos.js).
+  ```bash
+  k6 run k6/smoke-test-campeonatos.js
+  ```
 
 ---

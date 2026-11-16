@@ -200,14 +200,42 @@ app.UseAuthorization();
 app.MapControllers();
 app.MapHub<TatameHub>("/hubs/tatame");
 
-// 9. Health Check & Database Migration Endpoint
+// 9. Health Check, Métricas (Prometheus / JSON) & Database Migration Endpoint
+var processStartTime = DateTime.UtcNow;
+
 app.MapGet("/health", () => Results.Ok(new
 {
     status = "Healthy",
     environment = app.Environment.EnvironmentName,
     timestamp = DateTime.UtcNow,
+    uptime = (DateTime.UtcNow - processStartTime).ToString(),
     engine = ".NET 8 Judoo Engine (EF Core Migrations + Dapper Queries)",
 }));
+
+app.MapGet("/metrics", () =>
+{
+    var uptimeSeconds = (DateTime.UtcNow - processStartTime).TotalSeconds;
+    var memoryBytes = GC.GetTotalMemory(false);
+
+    var prometheusMetrics = new StringBuilder();
+    prometheusMetrics.AppendLine("# HELP judoo_uptime_seconds Tempo de atividade da aplicacao em segundos.");
+    prometheusMetrics.AppendLine("# TYPE judoo_uptime_seconds gauge");
+    prometheusMetrics.AppendLine($"judoo_uptime_seconds {uptimeSeconds:F2}");
+    prometheusMetrics.AppendLine();
+    prometheusMetrics.AppendLine("# HELP judoo_memory_allocated_bytes Memoria gerenciada alocada no runtime.");
+    prometheusMetrics.AppendLine("# TYPE judoo_memory_allocated_bytes gauge");
+    prometheusMetrics.AppendLine($"judoo_memory_allocated_bytes {memoryBytes}");
+    prometheusMetrics.AppendLine();
+    prometheusMetrics.AppendLine("# HELP judoo_slo_latency_p95_target_ms Alvo do SLO de latencia p95 em milissegundos.");
+    prometheusMetrics.AppendLine("# TYPE judoo_slo_latency_p95_target_ms gauge");
+    prometheusMetrics.AppendLine("judoo_slo_latency_p95_target_ms 200.0");
+    prometheusMetrics.AppendLine();
+    prometheusMetrics.AppendLine("# HELP judoo_slo_availability_target_percent Alvo do SLO de disponibilidade percentual.");
+    prometheusMetrics.AppendLine("# TYPE judoo_slo_availability_target_percent gauge");
+    prometheusMetrics.AppendLine("judoo_slo_availability_target_percent 99.5");
+
+    return Results.Content(prometheusMetrics.ToString(), "text/plain; version=0.0.4");
+}).WithTags("Observability");
 
 app.MapPost("/api/database/migrate", (JudooDbContext db) =>
 {

@@ -21,5 +21,6 @@ appsettings.Local.json
 *.local.json
 .env
 .env.*
+!.env.example
 DEPLOY_GCP_GITHUB.md
 DEPLOY_HOSTINGER.md
