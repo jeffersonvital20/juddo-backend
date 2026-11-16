@@ -95,15 +95,15 @@ public class HealthAndAuthIntegrationTests : IClassFixture<JudooApiFactory>
         var badPubResp = await _client.PostAsJsonAsync("/api/auth/registrar", new { Nome = "X", Email = "x@judoo.com", Senha = "12" });
         Assert.Equal(HttpStatusCode.BadRequest, badPubResp.StatusCode);
 
-        // 3. Autenticar como Secretaria e tentar criar campeonato ou usuário -> 403 Forbidden
-        var secToken = await LoginAsAsync("secretaria@judoo.com");
-        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", secToken);
+        // 3. Autenticar como Mesario e tentar criar campeonato ou usuário -> 403 Forbidden
+        var mesarioToken = await LoginAsAsync("mesario1@judoo.com");
+        _client.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", mesarioToken);
 
-        var secCamp = await _client.PostAsJsonAsync("/api/campeonatos", new CriarCampeonatoCommand("Teste", "SP", DateTime.UtcNow, DateTime.UtcNow));
-        Assert.Equal(HttpStatusCode.Forbidden, secCamp.StatusCode);
+        var mesarioCamp = await _client.PostAsJsonAsync("/api/campeonatos", new CriarCampeonatoCommand("Teste", "SP", DateTime.UtcNow, DateTime.UtcNow));
+        Assert.Equal(HttpStatusCode.Forbidden, mesarioCamp.StatusCode);
 
-        var secUser = await _client.PostAsJsonAsync("/api/usuarios", new { Nome = "Novo", Email = "novo@judoo.com", Senha = "123456", Role = PerfilUsuario.Mesario });
-        Assert.Equal(HttpStatusCode.Forbidden, secUser.StatusCode);
+        var mesarioUser = await _client.PostAsJsonAsync("/api/usuarios", new { Nome = "Novo", Email = "novo@judoo.com", Senha = "123456", Role = PerfilUsuario.Mesario });
+        Assert.Equal(HttpStatusCode.Forbidden, mesarioUser.StatusCode);
 
         // 4. Autenticar como Admin -> cadastrar novo Mesario, listar, obter por ID e desativar
         var adminToken = await LoginAsAsync("admin@judoo.com");

@@ -264,6 +264,44 @@ public class PlacarLutaTests
         Assert.Equal(TipoVitoria.Ippon, t20.tipoVitoria);
     }
 
+    [Theory]
+    [InlineData(CorJudogi.Branco)]
+    [InlineData(CorJudogi.Azul)]
+    public void AplicarPontuacao_Yuko_DeveIncrementarContador(CorJudogi cor)
+    {
+        var placar = new PlacarLuta(Guid.NewGuid());
+        var res = placar.AplicarPontuacao(cor, TipoPontuacao.Yuko);
+
+        Assert.False(res.lutaEncerrada);
+        if (cor == CorJudogi.Branco)
+        {
+            Assert.Equal(1, placar.YukoBranco);
+            Assert.Equal(0, placar.YukoAzul);
+        }
+        else
+        {
+            Assert.Equal(1, placar.YukoAzul);
+            Assert.Equal(0, placar.YukoBranco);
+        }
+
+        // Cancelar Yuko
+        placar.AplicarPontuacao(cor, TipoPontuacao.CancelarYuko);
+        Assert.Equal(0, cor == CorJudogi.Branco ? placar.YukoBranco : placar.YukoAzul);
+    }
+
+    [Theory]
+    [InlineData(CorJudogi.Branco)]
+    [InlineData(CorJudogi.Azul)]
+    public void AplicarPontuacao_YukoNoGoldenScore_DeveEncerrarLuta(CorJudogi cor)
+    {
+        var placar = new PlacarLuta(Guid.NewGuid()) { EmGoldenScore = true };
+        var res = placar.AplicarPontuacao(cor, TipoPontuacao.Yuko);
+
+        Assert.True(res.lutaEncerrada);
+        Assert.Equal(cor, res.vencedor);
+        Assert.Equal(TipoVitoria.Yuko, res.tipoVitoria);
+    }
+
     [Fact]
     public void SetRawScores_DeveHidratarTodosOsCamposDoPlacar()
     {
@@ -282,14 +320,18 @@ public class PlacarLutaTests
             cronometro: 95,
             goldenScore: true,
             rodando: true,
-            sonoMama: true
+            sonoMama: true,
+            yukoB: 2,
+            yukoA: 1
         );
 
         Assert.Equal(1, placar.IpponBranco);
         Assert.Equal(2, placar.WazaAriBranco);
+        Assert.Equal(2, placar.YukoBranco);
         Assert.Equal(1, placar.ShidoBranco);
         Assert.Equal(0, placar.IpponAzul);
         Assert.Equal(1, placar.WazaAriAzul);
+        Assert.Equal(1, placar.YukoAzul);
         Assert.Equal(2, placar.ShidoAzul);
         Assert.True(placar.OsaekomiAtivo);
         Assert.Equal(CorJudogi.Azul, placar.OsaekomiCor);

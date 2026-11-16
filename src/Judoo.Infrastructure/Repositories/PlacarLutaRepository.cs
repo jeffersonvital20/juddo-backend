@@ -52,22 +52,26 @@ public class PlacarLutaRepository : IPlacarLutaRepository
             corOsae = parsedCor;
         }
 
+        var rowDict = (IDictionary<string, object?>)row;
+        int GetInt(string key) => rowDict.TryGetValue(key, out var val) && val != null ? Convert.ToInt32(val) : 0;
+        bool GetBool(string key) => rowDict.TryGetValue(key, out var val) && val != null && Convert.ToBoolean(val);
+
         placar.SetRawScores(
-            (int)row.ipponbranco,
-            (int)row.wazaaribranco,
-            (int)row.shidobranco,
-            (int)row.ipponazul,
-            (int)row.wazaariazul,
-            (int)row.shidoazul,
-            (bool)row.osaekomiativo,
+            GetInt("ipponbranco"),
+            GetInt("wazaaribranco"),
+            GetInt("shidobranco"),
+            GetInt("ipponazul"),
+            GetInt("wazaariazul"),
+            GetInt("shidoazul"),
+            GetBool("osaekomiativo"),
             corOsae,
-            (int)row.osaekomitemposegundos,
-            (int)row.cronometrosegundos,
-            (bool)row.emgoldenscore,
-            (bool)row.cronometrorodando,
-            (bool)row.sonomama,
-            (int)row.yukobranco,
-            (int)row.yukoazul
+            GetInt("osaekomitemposegundos"),
+            GetInt("cronometrosegundos"),
+            GetBool("emgoldenscore"),
+            GetBool("cronometrorodando"),
+            GetBool("sonomama"),
+            GetInt("yukobranco"),
+            GetInt("yukoazul")
         );
 
         return placar;
